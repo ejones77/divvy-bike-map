@@ -56,7 +56,6 @@ class XGBModel:
             processed_df = self.preprocessor.transform(df, inference_mode=True)
         except Exception as e:
             logger.error(f"Preprocessing failed: {e}")
-            # Fallback: create a minimal feature set
             processed_df = df.copy()
             processed_df['availability_ratio'] = processed_df['num_bikes_available'] / processed_df['capacity'].fillna(20)
             processed_df['availability_target_current'] = processed_df['availability_ratio'].apply(
