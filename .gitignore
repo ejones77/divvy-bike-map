@@ -1,0 +1,63 @@
+# Environment
+.env
+*.env.local
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Javascript
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+.ipynb_checkpoints/
+*.egg-info/
+*.pytest_cache/
+
+# ML Models
+xgb_model*/
+output/
+scripts/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database
+postgres_data/
+*.db
+*.sqlite
+
+# Data
+data/
+*.csv
+*.png
+*.parquet
+*.txt
+*.tmp

@@ -1,0 +1,83 @@
+services:
+  api:
+    build: ./api
+    container_name: divvy_api
+    user: "0:0"
+    volumes:
+      - ./api/static:/app/static:ro
+      - ./api/templates:/app/templates:ro
+    environment:
+      DB_URL: "${DB_URL}"
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DIVVY_STATION_INFO_URL: "https://gbfs.lyft.com/gbfs/2.3/chi/en/station_information.json"
+      DIVVY_STATION_STATUS_URL: "https://gbfs.lyft.com/gbfs/2.3/chi/en/station_status.json"
+      ML_SERVICE_URL: "http://ml:5000"
+      ML_REQUEST_TIMEOUT_MIN: "5"
+      ML_PORT: "5000"
+      DATA_COLLECTION_INTERVAL_MIN: "15"
+      PREDICTION_INTERVAL_HOURS: "2"
+    ports:
+      - "80:8080"
+    depends_on:
+      ml:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 120s
+    networks:
+      - divvy_network
+
+  ml:
+    build: ./ml-pipeline
+    container_name: divvy_ml
+    volumes:
+      - ./ml-pipeline/divvy_ml:/app/divvy_ml:rw
+      - ./ml-pipeline/output:/app/output:rw
+      - ./ml-pipeline/xgb_model:/app/xgb_model:rw
+    environment:
+      ML_PORT: "5000"
+      DB_URL: "${DB_URL}"
+      AWS_REGION: "${AWS_REGION:-us-east-2}"
+      MODEL_S3_BUCKET: "${MODEL_S3_BUCKET:-divvy-bike-availability-trained-models}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+    networks:
+      - divvy_network
+    command: ["/app/startup.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: divvy_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - divvy_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: divvy_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - divvy_network
+
+networks:
+  divvy_network:
+    name: divvy_network
+    driver: bridge

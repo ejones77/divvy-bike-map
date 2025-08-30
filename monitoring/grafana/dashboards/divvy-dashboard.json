@@ -1,0 +1,46 @@
+{
+  "id": null,
+  "title": "Divvy Services Dashboard",
+  "tags": ["divvy"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "API Request Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "rate(promhttp_metric_handler_requests_total{job=\"divvy-api\"}[5m])",
+          "legendFormat": "Requests/sec"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "ML Prediction Requests",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "ml_prediction_requests_total",
+          "legendFormat": "Total Predictions"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "ML Prediction Duration",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(ml_prediction_duration_seconds_sum[5m]) / rate(ml_prediction_duration_seconds_count[5m])",
+          "legendFormat": "Avg Duration (s)"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "5s"
+}

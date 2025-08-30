@@ -1,0 +1,38 @@
+# Large model directories  
+data/
+xgb_model/
+
+# Python virtual environments
+.venv/
+.tmp/
+__pycache__/
+.pytest_cache/
+
+# Development files
+*.csv
+*.json
+*.txt
+*.gz
+*.tar.gz
+*.parquet
+*.png
+.python-version
+map.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Only keep what we need:
+# - pyproject.toml
+# - uv.lock  
+# - divvy_ml/ source code
+# - tests/ (if needed)
+# - Dockerfile
+# - README.md

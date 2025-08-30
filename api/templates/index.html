@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}}</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif; 
+        }
+        .header {
+            background: #1e40af;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+        .controls {
+            padding: 1rem;
+            background: #f3f4f6;
+            text-align: center;
+        }
+        .refresh-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background: #059669;
+        }
+        #map { 
+            height: 600px; 
+            width: 100%; 
+        }
+        .station-popup {
+            text-align: center;
+        }
+        .bike-count {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #10b981;
+        }
+        .dock-count {
+            font-size: 1em;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{.title}}</h1>
+        <p>Live bike availability across Chicago</p>
+    </div>
+    
+    <div class="controls">
+        <label class="toggle-switch">
+            <input type="radio" name="view-mode" value="current" checked 
+                   hx-get="/api/stations?mode=current" 
+                   hx-target="#station-data">
+            Current Availability
+        </label>
+        <label class="toggle-switch">
+            <input type="radio" name="view-mode" value="predicted"
+                   hx-get="/api/stations?mode=predicted" 
+                   hx-target="#station-data">
+            6h Prediction
+        </label>
+        <div id="prediction-status" style="margin-left: 1rem; color: #f59e0b; display: inline-block;"></div>
+        <span id="last-updated"></span>
+    </div>
+    
+    <div id="map"></div>
+    
+    <!-- Hidden div that HTMX will populate with station data -->
+    <div id="station-data" 
+         hx-get="/api/stations" 
+         hx-trigger="load, every 30s"
+         style="display: none;">
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <!-- App JS (ES module) -->
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

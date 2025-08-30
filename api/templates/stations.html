@@ -1,0 +1,14 @@
+{{range .stations}}
+<div class="station-data"
+     data-station-id="{{.StationID}}"
+     data-name="{{.Name}}"
+     data-lat="{{.Lat}}"
+     data-lon="{{.Lon}}"
+     data-capacity="{{.Capacity}}"
+     data-bikes-available="{{.NumBikesAvailable}}"
+     data-docks-available="{{.NumDocksAvailable}}"
+     data-prediction="{{with $p := index $.predictionsMap .StationID}}{{$p.AvailabilityPrediction}}{{end}}"
+     data-prediction-time="{{with $p := index $.predictionsMap .StationID}}{{$p.PredictionTime.Format "2006-01-02T15:04:05Z07:00"}}{{end}}"
+     data-horizon-hours="{{with $p := index $.predictionsMap .StationID}}{{$p.HorizonHours}}{{end}}">
+</div>
+{{end}}

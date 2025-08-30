@@ -1,0 +1,8 @@
+{{range .predictions}}
+<div class="prediction-data" 
+     data-station-id="{{.StationID}}"
+     data-current="{{.Current}}"
+     data-predicted="{{.Predicted}}"
+     data-confidence="{{.Confidence}}">
+</div>
+{{end}}

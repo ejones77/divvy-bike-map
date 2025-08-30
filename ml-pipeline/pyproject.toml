@@ -1,0 +1,27 @@
+[project]
+name = "divvy-ml"
+version = "0.1.0"
+description = "Divvy bike availability prediction"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.40.11",
+    "flask>=3.1.1",
+    "joblib>=1.5.1",
+    "numpy>=2.3.2",
+    "pandas>=2.3.1",
+    "prometheus-client>=0.22.1",
+    "psycopg2-binary>=2.9.10",
+    "pytest>=8.4.1",
+    "scikit-learn>=1.7.1",
+    "xgboost>=3.0.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
