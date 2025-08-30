@@ -111,6 +111,10 @@ class DataPreprocessor:
         df = df.merge(stations_df, on='station_id', how='left', suffixes=('', '_drop'))
         df = df.loc[:, ~df.columns.str.endswith('_drop')]
         
+        # Add id column if missing (for model compatibility)
+        if 'id' not in df.columns:
+            df['id'] = range(len(df))
+        
         df['recorded_at'] = pd.to_datetime(df['recorded_at'])
         df = df.sort_values(['station_id', 'recorded_at']).reset_index(drop=True)
         
