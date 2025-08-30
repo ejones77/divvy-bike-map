@@ -52,15 +52,34 @@ class XGBModel:
         if self.preprocessor is None:
             raise ValueError("Preprocessor not loaded")
         
-        processed_df = self.preprocessor.transform(df, inference_mode=True)
+        try:
+            processed_df = self.preprocessor.transform(df, inference_mode=True)
+        except Exception as e:
+            logger.error(f"Preprocessing failed: {e}")
+            # Fallback: create a minimal feature set
+            processed_df = df.copy()
+            processed_df['availability_ratio'] = processed_df['num_bikes_available'] / processed_df['capacity'].fillna(20)
+            processed_df['availability_target_current'] = processed_df['availability_ratio'].apply(
+                lambda x: 0 if x >= 0.6 else (1 if x >= 0.3 else 2)
+            )
         
         # Ensure all training-time feature columns are present at inference
         # Add any missing columns with a safe default (0)
         if self.feature_columns is None:
             raise ValueError("Feature columns not loaded")
+        
         missing_cols = [col for col in self.feature_columns if col not in processed_df.columns]
-        for col in missing_cols:
-            processed_df[col] = 0
+        if missing_cols:
+            logger.warning(f"Adding missing features with defaults: {missing_cols}")
+            for col in missing_cols:
+                if 'ratio' in col or 'avg' in col or 'utilization' in col:
+                    processed_df[col] = 0.5  # Reasonable default for ratios
+                elif 'sin' in col or 'cos' in col:
+                    processed_df[col] = 0.0  # Neutral for trig functions
+                elif 'std' in col or 'volatility' in col:
+                    processed_df[col] = 0.1  # Low volatility default
+                else:
+                    processed_df[col] = 0.0  # Default to zero
         
         features = processed_df[self.feature_columns].copy()
         
@@ -72,6 +91,7 @@ class XGBModel:
                 logger.warning(f"unseen_categories_in_{col}_using_fallback")
                 features[col] = 0
         
+        logger.info(f"Prepared features shape: {features.shape}")
         return features.values
     
     def predict(self, df: pd.DataFrame) -> np.ndarray:
