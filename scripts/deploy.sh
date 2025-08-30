@@ -100,9 +100,23 @@ deploy_application() {
     docker-compose pull
     docker-compose up -d --remove-orphans
     
+    echo "=== Cleaning up old Docker images ==="
+    docker image prune -f --filter "until=24h"
+    
+    docker system prune -f
+    
+    echo "=== Setting up cron jobs ==="
+    setup_cron_jobs || echo "Warning: Cron job setup failed, but deployment continues"
+}
+
+# Function to setup cron jobs (non-critical)
+setup_cron_jobs() {
     echo "=== Setting up auto-restart on boot ==="
     APP_DIR="/opt/divvy-bike-availability"
     (crontab -l 2>/dev/null | grep -v "@reboot.*divvy-bike"; echo "@reboot cd $APP_DIR && docker-compose up -d") | crontab -
+    
+    echo "=== Setting up weekly Docker cleanup ==="
+    (crontab -l 2>/dev/null | grep -v "docker system prune"; echo "0 2 * * 0 docker system prune -a -f --volumes") | crontab -
 }
 
 # Main deployment flow
