@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Protocol
 from divvy_ml.pipelines.preprocessing import DataPreprocessor
 from divvy_ml.utils.model_loader import get_model_path
+from divvy_ml.utils.database import DatabaseClient
 import logging
 
 logger = logging.getLogger(__name__)
@@ -120,12 +121,16 @@ class DivvyPredictor:
     
     def __init__(self, model_path: Optional[str] = None):
         self.model = XGBModel(model_path)
+        
+        self.data_loader = DataPreprocessor(
+            n_features=30,
+            use_scaling=False
+        )
     
     def _load_raw_data(self):
         """Load raw data without preprocessing."""
         try:
-            # Use the saved preprocessor's database client
-            db_df = self.model.preprocessor.db_client.get_recent_availability_data(hours_back=2)
+            db_df = self.data_loader.db_client.get_recent_availability_data(hours_back=2)
             if not db_df.empty:
                 return db_df
             else:
