@@ -143,10 +143,12 @@ class DivvyPredictor:
             if processed_data is None or processed_data.empty:
                 raise ValueError("Preprocessing failed or returned empty data")
             
-            feature_data = processed_data.drop(columns=['station_id'] if 'station_id' in processed_data.columns else [])
+            # Extract just the feature columns for prediction
+            feature_data = processed_data[self.model.feature_columns].copy()
             
-            predictions = self.model.predict(feature_data)
-            probabilities = self.model.predict_proba(feature_data)
+            # Predict directly on the preprocessed features (no further preprocessing needed)
+            predictions = self.model.model.predict(feature_data)
+            probabilities = self.model.model.predict_proba(feature_data)
             
             result_df = pd.DataFrame({
                 'station_id': processed_data['station_id'],
