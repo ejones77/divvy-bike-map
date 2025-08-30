@@ -1,0 +1,111 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+  REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: Setup ECR repository
+      run: aws ecr describe-repositories --repository-names $REPOSITORY || aws ecr create-repository --repository-name $REPOSITORY
+    
+    - name: Build and push images
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build both services
+        docker compose build api ml
+        
+        # Function to tag and push image
+        push_image() {
+          local service=$1
+          local image_name="divvy-bike-availability-${service}"
+          
+          docker tag ${image_name}:latest $ECR_REGISTRY/$REPOSITORY:${service}-latest
+          docker tag ${image_name}:latest $ECR_REGISTRY/$REPOSITORY:${service}-$IMAGE_TAG
+          
+          docker push $ECR_REGISTRY/$REPOSITORY:${service}-latest
+          docker push $ECR_REGISTRY/$REPOSITORY:${service}-$IMAGE_TAG
+        }
+        
+        # Push both images
+        push_image api
+        push_image ml
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.0
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        envs: ECR_REGISTRY,IMAGE_TAG
+        script: |
+          set -e
+          
+          # Setup system dependencies (idempotent)
+          command -v docker >/dev/null || {
+            sudo apt-get update -qq
+            sudo apt-get install -y docker.io docker-compose-plugin git awscli
+            sudo systemctl enable --now docker
+            sudo usermod -aG docker $USER
+          }
+          
+          # Setup app directory
+          APP_DIR="/opt/divvy-bike-availability"
+          sudo mkdir -p $APP_DIR && sudo chown $USER:$USER $APP_DIR && cd $APP_DIR
+          
+          # Update code
+          [ -d .git ] && git fetch origin && git reset --hard origin/main || git clone ${{ github.server_url }}/${{ github.repository }} .
+          
+          # Configure AWS and login to ECR
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region ${{ secrets.AWS_REGION }}
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+          
+          # Create production config
+          cat > .env << EOF
+          DB_URL=${{ secrets.PRODUCTION_DB_URL }}
+          AWS_REGION=${{ secrets.AWS_REGION }}
+          MODEL_S3_BUCKET=${{ secrets.MODEL_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ML_REQUEST_TIMEOUT_MIN=5
+          ML_PORT=5000
+          DATA_COLLECTION_INTERVAL_MIN=15
+          PREDICTION_INTERVAL_HOURS=2
+          EOF
+          
+          # Update compose file for ECR images
+          sed -i "s|build: ./api|image: $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:api-$IMAGE_TAG|" docker-compose.yml
+          sed -i "s|build: ./ml-pipeline|image: $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:ml-$IMAGE_TAG|" docker-compose.yml
+          
+          # Deploy
+          docker compose pull && docker compose up -d --remove-orphans
+          
+          # Setup auto-restart (idempotent)
+          (crontab -l 2>/dev/null | grep -v "@reboot.*divvy-bike"; echo "@reboot cd $APP_DIR && docker compose up -d") | crontab -
