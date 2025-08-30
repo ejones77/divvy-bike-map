@@ -36,7 +36,6 @@ venv/
 # ML Models
 xgb_model*/
 output/
-scripts/
 
 # IDE
 .vscode/
