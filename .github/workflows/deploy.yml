@@ -53,58 +53,40 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        cat > deploy_script.sh << 'SCRIPT_EOF'
-        #!/bin/bash
-        set -e
-        
-        ECR_REGISTRY="$1"
-        IMAGE_TAG="$2"
-        
-        command -v docker >/dev/null || {
-          sudo apt-get update -qq
-          sudo apt-get install -y docker.io docker-compose-plugin git awscli
-          sudo systemctl enable --now docker
-          sudo usermod -aG docker $USER
-        }
-        
-        APP_DIR="/opt/divvy-bike-availability"
-        sudo mkdir -p $APP_DIR && sudo chown $USER:$USER $APP_DIR && cd $APP_DIR
-        
-        [ -d .git ] && git fetch origin && git reset --hard origin/main || git clone https://github.com/${{ github.repository }} .
-        
-        aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws configure set default.region ${{ secrets.AWS_REGION }}
-        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY
-        
-        cat > .env << EOF
-        DB_URL=${{ secrets.PRODUCTION_DB_URL }}
-        AWS_REGION=${{ secrets.AWS_REGION }}
-        MODEL_S3_BUCKET=${{ secrets.MODEL_S3_BUCKET }}
-        AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-        ML_REQUEST_TIMEOUT_MIN=5
-        ML_PORT=5000
-        DATA_COLLECTION_INTERVAL_MIN=15
-        PREDICTION_INTERVAL_HOURS=2
-        EOF
-        
-        sed -i "s|build: ./api|image: $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:api-$IMAGE_TAG|" docker-compose.yml
-        sed -i "s|build: ./ml-pipeline|image: $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:ml-$IMAGE_TAG|" docker-compose.yml
-        
-        docker compose pull && docker compose up -d --remove-orphans
-        
-        (crontab -l 2>/dev/null | grep -v "@reboot.*divvy-bike"; echo "@reboot cd $APP_DIR && docker compose up -d") | crontab -
-        
-        echo "Deployment completed successfully"
-        SCRIPT_EOF
-        
-        # Execute deployment via SSM
+        # Execute deployment via SSM - send commands directly
         COMMAND_ID=$(aws ssm send-command \
           --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
           --document-name "AWS-RunShellScript" \
-          --parameters "commands=[\"$(base64 -w 0 deploy_script.sh | tr -d '\n')\"]" \
+          --parameters 'commands=[
+            "export ECR_REGISTRY='"$ECR_REGISTRY"'",
+            "export IMAGE_TAG='"$IMAGE_TAG"'",
+            "set -e",
+            "command -v docker >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y docker.io docker-compose-plugin git awscli && sudo systemctl enable --now docker && sudo usermod -aG docker $USER; }",
+            "APP_DIR=\"/opt/divvy-bike-availability\"",
+            "sudo mkdir -p $APP_DIR && sudo chown $USER:$USER $APP_DIR && cd $APP_DIR",
+            "[ -d .git ] && git fetch origin && git reset --hard origin/main || git clone https://github.com/${{ github.repository }} .",
+            "aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}",
+            "aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+            "aws configure set default.region ${{ secrets.AWS_REGION }}",
+            "aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin $ECR_REGISTRY",
+            "cat > .env << EOF",
+            "DB_URL=${{ secrets.PRODUCTION_DB_URL }}",
+            "AWS_REGION=${{ secrets.AWS_REGION }}",
+            "MODEL_S3_BUCKET=${{ secrets.MODEL_S3_BUCKET }}",
+            "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}",
+            "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}",
+            "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}",
+            "ML_REQUEST_TIMEOUT_MIN=5",
+            "ML_PORT=5000",
+            "DATA_COLLECTION_INTERVAL_MIN=15",
+            "PREDICTION_INTERVAL_HOURS=2",
+            "EOF",
+            "sed -i \"s|build: ./api|image: $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:api-$IMAGE_TAG|\" docker-compose.yml",
+            "sed -i \"s|build: ./ml-pipeline|image: $ECR_REGISTRY/${{ secrets.ECR_REPOSITORY }}:ml-$IMAGE_TAG|\" docker-compose.yml",
+            "docker compose pull && docker compose up -d --remove-orphans",
+            "(crontab -l 2>/dev/null | grep -v \"@reboot.*divvy-bike\"; echo \"@reboot cd $APP_DIR && docker compose up -d\") | crontab -",
+            "echo \"Deployment completed successfully\""
+          ]' \
           --query 'Command.CommandId' \
           --output text)
         
@@ -114,21 +96,31 @@ jobs:
           --command-id $COMMAND_ID \
           --instance-id ${{ secrets.EC2_INSTANCE_ID }}
         
+        echo "=== COMMAND OUTPUT ==="
         aws ssm get-command-invocation \
           --command-id $COMMAND_ID \
           --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
           --query 'StandardOutputContent' \
           --output text
         
+        echo "=== COMMAND ERRORS ==="
         ERROR_OUTPUT=$(aws ssm get-command-invocation \
           --command-id $COMMAND_ID \
           --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
           --query 'StandardErrorContent' \
           --output text)
+        echo "$ERROR_OUTPUT"
         
+        echo "=== COMMAND STATUS ==="
+        aws ssm get-command-invocation \
+          --command-id $COMMAND_ID \
+          --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
+          --query 'Status' \
+          --output text
+        
+        # Always show the error details for debugging
         if [ -n "$ERROR_OUTPUT" ] && [ "$ERROR_OUTPUT" != "None" ]; then
-          echo "Deployment errors:"
-          echo "$ERROR_OUTPUT"
+          echo "Deployment failed with errors shown above"
           exit 1
         fi
         
