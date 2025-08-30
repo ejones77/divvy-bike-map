@@ -53,15 +53,7 @@ class XGBModel:
         if self.preprocessor is None:
             raise ValueError("Preprocessor not loaded")
         
-        try:
-            processed_df = self.preprocessor.transform(df, inference_mode=True)
-        except Exception as e:
-            logger.error(f"Preprocessing failed: {e}")
-            processed_df = df.copy()
-            processed_df['availability_ratio'] = processed_df['num_bikes_available'] / processed_df['capacity'].fillna(20)
-            processed_df['availability_target_current'] = processed_df['availability_ratio'].apply(
-                lambda x: 0 if x >= 0.6 else (1 if x >= 0.3 else 2)
-            )
+        processed_df = self.preprocessor.transform(df, inference_mode=True)
         
         # Ensure all training-time feature columns are present at inference
         # Add any missing columns with a safe default (0)
